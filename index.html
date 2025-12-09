@@ -22,7 +22,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-3xl font-bold text-emerald-800"><i class="fa-solid fa-seedling mr-2"></i>Baby Bloom</h1>
-                <p class="text-sm text-emerald-600">Dev Test Harness v1.4 (Hardcoded URL)</p>
+                <p class="text-sm text-emerald-600">Dev Test Harness v1.5</p>
             </div>
             
             <!-- API URL Config (Hidden/ReadOnly) -->
@@ -172,8 +172,8 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         // --- CONFIG ---
-        // HARDCODED URL
-        const API_URL = "https://script.google.com/macros/s/AKfycbyAx-yqBhpgM99ei3UcwEE_beoceE2DW9RVo4cMNQ2Q3Y38eyLftz-cinMngHOotohK/exec";
+        // UPDATED URL
+        const API_URL = "https://script.google.com/macros/s/AKfycbyalx3VXoHDaOsXHyYSluBxR34xJTUnhO_B66pgYJafxS1v09qTgLzeR4kEHU4kszba/exec";
         
         let CURRENT_USER_ID = localStorage.getItem('bloom_user_id') || "";
         let CURRENT_ROLE = localStorage.getItem('bloom_user_role') || "nanny";
@@ -211,9 +211,9 @@
         // --- API HELPERS (CORS BYPASS) ---
         async function callApi(payload) {
             try {
-                // To bypass CORS in GAS, we use 'text/plain'
+                // To bypass CORS in GAS, we use 'text/plain' and 'follow'
                 const response = await fetch(API_URL, {
-                    redirect: "follow", // Necessary for GAS redirects
+                    redirect: "follow", 
                     method: 'POST',
                     headers: {
                         "Content-Type": "text/plain;charset=utf-8", 
@@ -221,10 +221,8 @@
                     body: JSON.stringify(payload)
                 });
                 
-                // If the response is opaque or a login page, this might throw or return text
                 const text = await response.text();
                 
-                // Check if we got an HTML login page instead of JSON
                 if (text.includes("<!DOCTYPE html>") || text.includes("accounts.google.com")) {
                      throw new Error("Authentication Error: The script returned a Login Page instead of JSON. Please ensure the Deployment is set to 'Anyone' (Anonymous) access.");
                 }
