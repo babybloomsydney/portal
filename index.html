@@ -22,7 +22,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-3xl font-bold text-emerald-800"><i class="fa-solid fa-seedling mr-2"></i>Baby Bloom</h1>
-                <p class="text-sm text-emerald-600">Dev Test Harness v1.2</p>
+                <p class="text-sm text-emerald-600">Dev Test Harness v1.3 (CORS Fix)</p>
             </div>
             
             <!-- API URL Config -->
@@ -36,7 +36,7 @@
             </div>
         </div>
 
-        <!-- LOGIN BAR (NEW) -->
+        <!-- LOGIN BAR -->
         <div class="glass p-4 rounded-xl border border-emerald-100 flex flex-col sm:flex-row items-center gap-4 shadow-sm">
             <div class="flex items-center gap-2 w-full sm:w-auto">
                 <label class="text-xs font-bold text-gray-500 uppercase">Role:</label>
@@ -60,10 +60,8 @@
     <!-- MAIN CONTENT -->
     <div id="app" class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        <!-- LEFT COL: USER CONTEXT & CHILD LIST -->
+        <!-- LEFT COL: CHILD LIST -->
         <div class="md:col-span-1 space-y-6">
-            
-            <!-- Children List -->
             <div class="glass p-4 rounded-xl shadow-sm border border-emerald-100 min-h-[200px]">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Assigned Children</h3>
@@ -115,7 +113,7 @@
                     </div>
                     
                     <div id="masteryList" class="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                        <!-- Mastery Items will go here -->
+                        <!-- Mastery Items -->
                     </div>
 
                     <!-- Add Manual Log Section -->
@@ -222,23 +220,33 @@
             setTimeout(() => el.innerText = "", 2000);
         }
 
-        // --- API HELPERS ---
+        // --- API HELPERS (FIXED FOR CORS) ---
         async function callApi(payload) {
             if (!API_URL) {
                 alert("Please configure the Google Web App URL first.");
                 return null;
             }
             try {
-                // Assuming Script handles CORS via simple text/plain or configured ContentService
+                // FIXED: Use redirect: 'follow' and text/plain to avoid Preflight checks
                 const response = await fetch(API_URL, {
+                    redirect: "follow",
                     method: 'POST',
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8", 
+                    },
                     body: JSON.stringify(payload)
                 });
+                
                 const json = await response.json();
                 return json;
             } catch (e) {
-                console.error(e);
-                alert("API Error: " + e.message + "\nCheck console for CORS or URL issues.");
+                console.error("API Fetch Error:", e);
+                // Try to help debug
+                if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+                    alert("Network Error: Could not reach the script.\n\n1. Check if the URL is correct.\n2. Ensure Deployment is 'Anyone' (not 'Only Me').\n3. Check browser console for details.");
+                } else {
+                    alert("API Error: " + e.message);
+                }
                 return null;
             }
         }
@@ -249,9 +257,7 @@
             const listEl = document.getElementById('childList');
             listEl.innerHTML = '<div class="text-center py-4"><div class="loading-spinner ease-linear rounded-full border-4 border-t-4 border-emerald-200 h-6 w-6 mx-auto"></div></div>';
             
-            // Determine action based on Role
             const actionType = (CURRENT_ROLE === 'parent') ? "getParentChildren" : "getEducatorChildren";
-            // Determine param key based on Role (backend expects nannyId or parentId)
             const payload = { action: actionType };
             if (CURRENT_ROLE === 'parent') {
                 payload.parentId = CURRENT_USER_ID;
@@ -283,14 +289,14 @@
                     listEl.appendChild(div);
                 });
             } else {
-                listEl.innerHTML = `<p class="text-sm text-red-500 text-center py-2 bg-red-50 rounded border border-red-100">${res ? res.message : "No children found"}</p>`;
+                const errMsg = res ? res.message : "Connection failed";
+                listEl.innerHTML = `<p class="text-sm text-red-500 text-center py-2 bg-red-50 rounded border border-red-100">${errMsg}</p>`;
             }
         }
 
         async function loadChild(child) {
             ACTIVE_CHILD_ID = child.childId;
             
-            // Update UI Header
             document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('childView').classList.remove('hidden');
             document.getElementById('activeChildName').innerText = child.firstName;
@@ -322,12 +328,12 @@
                 return;
             }
 
+            // Sort keys nicely if possible, or just list
             Object.keys(masteryObj).forEach(key => {
                 const score = masteryObj[key];
                 const row = document.createElement('div');
                 row.className = "flex justify-between items-center p-2 hover:bg-gray-50 rounded border-b border-gray-100 transition";
                 
-                // Color code score
                 let scoreColor = "bg-gray-200 text-gray-600";
                 if(score === 4) scoreColor = "bg-green-100 text-green-700 border border-green-200";
                 if(score === 0) scoreColor = "bg-red-50 text-red-400 border border-red-100";
@@ -373,7 +379,7 @@
             btn.innerText = originalText;
 
             if(res && res.status === "success") {
-                fetchProfile(); // Refresh list
+                fetchProfile();
                 document.getElementById('manualMilestoneId').value = "";
             } else {
                 alert("Update failed");
@@ -438,26 +444,23 @@
             if(res && res.status === "success") {
                 const activityId = res.data.activityId;
                 
-                // 2. Update UI to Polling State
                 resArea.classList.remove('hidden');
-                btn.innerHTML = '<i class="fa-solid fa-hourglass-start mr-2"></i> Generating (Please Wait)...';
+                btn.innerHTML = '<i class="fa-solid fa-hourglass-start mr-2"></i> Generating...';
                 statusBadge.className = "text-xs font-mono bg-yellow-100 text-yellow-800 px-2 py-1 rounded border border-yellow-200";
                 statusBadge.innerText = "PROCESSING";
                 contentArea.innerText = "Request queued. AI is thinking...";
 
-                // 3. Start Polling
                 if(POLLING_INTERVAL) clearInterval(POLLING_INTERVAL);
                 let attempts = 0;
                 
                 POLLING_INTERVAL = setInterval(async () => {
                     attempts++;
-                    if(attempts > 20) { // Timeout after ~60s
+                    if(attempts > 30) {
                         clearInterval(POLLING_INTERVAL);
                         btn.disabled = false;
                         btn.innerHTML = "Generate Activity";
                         statusBadge.innerText = "TIMEOUT";
                         statusBadge.className = "text-xs font-mono bg-red-100 text-red-800 px-2 py-1 rounded border border-red-200";
-                        contentArea.innerText = "The request took too long. Please try again.";
                         return;
                     }
 
