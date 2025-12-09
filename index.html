@@ -22,16 +22,15 @@
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-3xl font-bold text-emerald-800"><i class="fa-solid fa-seedling mr-2"></i>Baby Bloom</h1>
-                <p class="text-sm text-emerald-600">Dev Test Harness v1.3 (CORS Fix)</p>
+                <p class="text-sm text-emerald-600">Dev Test Harness v1.4 (Hardcoded URL)</p>
             </div>
             
-            <!-- API URL Config -->
+            <!-- API URL Config (Hidden/ReadOnly) -->
             <div class="w-full sm:w-auto flex flex-col gap-2">
-                <label class="text-xs font-semibold uppercase text-gray-500">Google Web App URL</label>
+                <label class="text-xs font-semibold uppercase text-gray-500">API Endpoint</label>
                 <div class="flex gap-2">
-                    <input type="password" id="apiUrlInput" placeholder="Paste Script URL here..." 
-                           class="border rounded px-3 py-1 text-sm w-full sm:w-64 focus:outline-emerald-500 transition shadow-sm">
-                    <button onclick="saveConfig()" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700 transition">Save</button>
+                    <input type="text" id="apiUrlInput" readonly
+                           class="border rounded px-3 py-1 text-sm w-full sm:w-64 bg-gray-100 text-gray-500 cursor-not-allowed">
                 </div>
             </div>
         </div>
@@ -173,7 +172,9 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         // --- CONFIG ---
-        let API_URL = localStorage.getItem('bloom_api_url') || "";
+        // HARDCODED URL
+        const API_URL = "https://script.google.com/macros/s/AKfycbyAx-yqBhpgM99ei3UcwEE_beoceE2DW9RVo4cMNQ2Q3Y38eyLftz-cinMngHOotohK/exec";
+        
         let CURRENT_USER_ID = localStorage.getItem('bloom_user_id') || "";
         let CURRENT_ROLE = localStorage.getItem('bloom_user_role') || "nanny";
         
@@ -183,21 +184,14 @@
 
         // --- INIT ---
         document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById('apiUrlInput').value = API_URL;
+            document.getElementById('apiUrlInput').value = API_URL; // Display only
             document.getElementById('userIdInput').value = CURRENT_USER_ID;
             document.getElementById('userRoleSelect').value = CURRENT_ROLE;
 
-            if (API_URL && CURRENT_USER_ID) {
+            if (CURRENT_USER_ID) {
                 fetchChildren();
             }
         });
-
-        function saveConfig() {
-            const val = document.getElementById('apiUrlInput').value.trim();
-            localStorage.setItem('bloom_api_url', val);
-            API_URL = val;
-            showStatus("URL Saved!");
-        }
 
         function handleLogin() {
             const id = document.getElementById('userIdInput').value.trim();
@@ -214,22 +208,12 @@
             fetchChildren();
         }
 
-        function showStatus(msg) {
-            const el = document.getElementById('statusMsg');
-            el.innerText = msg;
-            setTimeout(() => el.innerText = "", 2000);
-        }
-
-        // --- API HELPERS (FIXED FOR CORS) ---
+        // --- API HELPERS (CORS BYPASS) ---
         async function callApi(payload) {
-            if (!API_URL) {
-                alert("Please configure the Google Web App URL first.");
-                return null;
-            }
             try {
-                // FIXED: Use redirect: 'follow' and text/plain to avoid Preflight checks
+                // To bypass CORS in GAS, we use 'text/plain'
                 const response = await fetch(API_URL, {
-                    redirect: "follow",
+                    redirect: "follow", // Necessary for GAS redirects
                     method: 'POST',
                     headers: {
                         "Content-Type": "text/plain;charset=utf-8", 
@@ -237,16 +221,23 @@
                     body: JSON.stringify(payload)
                 });
                 
-                const json = await response.json();
-                return json;
+                // If the response is opaque or a login page, this might throw or return text
+                const text = await response.text();
+                
+                // Check if we got an HTML login page instead of JSON
+                if (text.includes("<!DOCTYPE html>") || text.includes("accounts.google.com")) {
+                     throw new Error("Authentication Error: The script returned a Login Page instead of JSON. Please ensure the Deployment is set to 'Anyone' (Anonymous) access.");
+                }
+
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    throw new Error("Invalid JSON received: " + text.substring(0, 50) + "...");
+                }
+
             } catch (e) {
                 console.error("API Fetch Error:", e);
-                // Try to help debug
-                if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-                    alert("Network Error: Could not reach the script.\n\n1. Check if the URL is correct.\n2. Ensure Deployment is 'Anyone' (not 'Only Me').\n3. Check browser console for details.");
-                } else {
-                    alert("API Error: " + e.message);
-                }
+                alert("API Error: " + e.message);
                 return null;
             }
         }
@@ -328,7 +319,6 @@
                 return;
             }
 
-            // Sort keys nicely if possible, or just list
             Object.keys(masteryObj).forEach(key => {
                 const score = masteryObj[key];
                 const row = document.createElement('div');
@@ -353,7 +343,6 @@
             });
         }
 
-        // --- ACTION: LOG OBSERVATION ---
         function populateLogInput(id, score) {
             document.getElementById('manualMilestoneId').value = id;
             document.getElementById('manualScore').value = score;
@@ -386,7 +375,6 @@
             }
         }
 
-        // --- ACTION: GENERATE ACTIVITY ---
         function addObjective() {
             const input = document.getElementById('objInput');
             const val = input.value.trim();
@@ -434,7 +422,6 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Queueing...';
             
-            // 1. Send Request
             const res = await callApi({
                 action: "generateActivity",
                 childId: ACTIVE_CHILD_ID,
