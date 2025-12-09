@@ -3,491 +3,558 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baby Bloom | Developer Console</title>
-    <!-- Tailwind CSS -->
+    <title>Baby Bloom | Social MVP</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js -->
+    
     <style>
-        body { background-color: #f0fdf4; } /* Soft Green background */
-        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
-        .loading-spinner { border-top-color: #34d399; -webkit-animation: spinner 1.5s linear infinite; animation: spinner 1.5s linear infinite; }
-        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { background-color: #f8fafc; padding-bottom: 80px; } /* Space for FAB */
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); }
+        .tab-active { border-bottom: 3px solid #10b981; color: #065f46; font-weight: bold; }
+        .tab-inactive { color: #64748b; }
+        .fab-menu { transition: transform 0.2s; }
+        .fab-open { transform: rotate(45deg); }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        /* Accordion Styles */
+        .accordion-content { transition: max-height 0.3s ease-in-out; max-height: 0; overflow: hidden; }
+        .accordion-open { max-height: 1000px; }
     </style>
 </head>
-<body class="text-gray-700 font-sans min-h-screen p-4 sm:p-8">
+<body class="text-slate-800 font-sans min-h-screen">
 
-    <!-- HEADER & CONFIG -->
-    <div class="max-w-5xl mx-auto mb-8 space-y-4">
-        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div>
-                <h1 class="text-3xl font-bold text-emerald-800"><i class="fa-solid fa-seedling mr-2"></i>Baby Bloom</h1>
-                <p class="text-sm text-emerald-600">Dev Test Harness v1.5</p>
-            </div>
-            
-            <!-- API URL Config (Hidden/ReadOnly) -->
-            <div class="w-full sm:w-auto flex flex-col gap-2">
-                <label class="text-xs font-semibold uppercase text-gray-500">API Endpoint</label>
-                <div class="flex gap-2">
-                    <input type="text" id="apiUrlInput" readonly
-                           class="border rounded px-3 py-1 text-sm w-full sm:w-64 bg-gray-100 text-gray-500 cursor-not-allowed">
+    <!-- 1. TOP NAV: Context & Tabs -->
+    <div class="fixed top-0 w-full z-50 bg-white/95 border-b border-gray-200 shadow-sm">
+        <!-- Top Bar: Child Selector -->
+        <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div id="childAvatar" class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-lg">
+                    ?
+                </div>
+                <div>
+                    <h1 id="childNameTitle" class="text-lg font-bold leading-tight">Loading...</h1>
+                    <p class="text-xs text-gray-400 cursor-pointer hover:text-emerald-600" onclick="logout()">Switch Child</p>
                 </div>
             </div>
+            <!-- Settings / Login (Hidden if logged in) -->
+            <button id="loginBtn" onclick="showLoginModal()" class="hidden text-sm bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">Login</button>
         </div>
 
-        <!-- LOGIN BAR -->
-        <div class="glass p-4 rounded-xl border border-emerald-100 flex flex-col sm:flex-row items-center gap-4 shadow-sm">
-            <div class="flex items-center gap-2 w-full sm:w-auto">
-                <label class="text-xs font-bold text-gray-500 uppercase">Role:</label>
-                <select id="userRoleSelect" class="border rounded px-2 py-1 text-sm bg-white focus:outline-emerald-500">
-                    <option value="nanny">Nanny / Educator</option>
-                    <option value="parent">Parent / Guardian</option>
-                </select>
-            </div>
-            <div class="flex items-center gap-2 w-full">
-                <label class="text-xs font-bold text-gray-500 uppercase whitespace-nowrap">User ID:</label>
-                <input type="text" id="userIdInput" placeholder="Paste UUID (e.g. 2acf41...)" 
-                       class="border rounded px-3 py-1 text-sm w-full focus:outline-emerald-500 font-mono text-gray-600">
-            </div>
-            <button onclick="handleLogin()" class="bg-emerald-600 text-white px-6 py-1 rounded text-sm hover:bg-emerald-700 font-bold shadow-sm transition w-full sm:w-auto">
-                LOGIN
+        <!-- Segmented Control (Tabs) -->
+        <div class="max-w-md mx-auto grid grid-cols-2 text-center text-sm font-medium border-t border-gray-100">
+            <button onclick="switchView('feed')" id="nav-feed" class="py-3 tab-active">
+                FEED
+            </button>
+            <button onclick="switchView('progress')" id="nav-progress" class="py-3 tab-inactive">
+                PROGRESS
             </button>
         </div>
-        <div id="statusMsg" class="text-xs text-right h-4 text-emerald-600 font-bold"></div>
     </div>
 
-    <!-- MAIN CONTENT -->
-    <div id="app" class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- 2. MAIN CONTENT AREA -->
+    <div class="max-w-md mx-auto mt-28 px-4">
 
-        <!-- LEFT COL: CHILD LIST -->
-        <div class="md:col-span-1 space-y-6">
-            <div class="glass p-4 rounded-xl shadow-sm border border-emerald-100 min-h-[200px]">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Assigned Children</h3>
-                    <button onclick="fetchChildren()" class="text-xs text-emerald-600 hover:underline"><i class="fa-solid fa-sync"></i></button>
-                </div>
-                
-                <div id="childList" class="space-y-2">
-                    <div class="text-center py-8 text-gray-400 text-sm italic">
-                        Login to view children.
-                    </div>
+        <!-- VIEW: FEED -->
+        <div id="view-feed" class="space-y-4">
+            <!-- Feed Loader -->
+            <div id="feedLoader" class="text-center py-10 text-gray-400">
+                <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+                <p class="text-xs mt-2">Updating timeline...</p>
+            </div>
+            <!-- Feed Container -->
+            <div id="feedContainer" class="space-y-4 pb-20"></div>
+        </div>
+
+        <!-- VIEW: PROGRESS -->
+        <div id="view-progress" class="hidden space-y-6">
+             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="font-bold text-gray-700 mb-4">Domain Balance</h3>
+                <canvas id="radarChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="font-bold text-gray-700 mb-2">Recent Observations</h3>
+                <div id="progressStats" class="text-sm text-gray-500">
+                    Loading stats...
                 </div>
             </div>
         </div>
 
-        <!-- RIGHT COL: ACTIVE CHILD WORKSPACE -->
-        <div class="md:col-span-2">
+    </div>
+
+    <!-- 3. FLOATING ACTION BUTTON (FAB) -->
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        <!-- FAB Menu Items (Hidden by default) -->
+        <div id="fabMenu" class="hidden flex flex-col items-end gap-3 mb-2">
+            <button onclick="openPlanModal()" class="flex items-center gap-3 bg-white text-slate-700 py-2 px-4 rounded-full shadow-lg border border-slate-100 animate-slide-up">
+                <span class="font-bold text-sm">Plan Activity</span>
+                <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            </button>
+            <button onclick="openLogModal()" class="flex items-center gap-3 bg-white text-slate-700 py-2 px-4 rounded-full shadow-lg border border-slate-100 animate-slide-up">
+                <span class="font-bold text-sm">Log Observation</span>
+                <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-eye"></i></div>
+            </button>
+        </div>
+        <!-- Main FAB -->
+        <button onclick="toggleFab()" id="fabBtn" class="w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center text-2xl fab-menu">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+    </div>
+
+    <!-- 4. MODALS -->
+    
+    <!-- LOGIN MODAL -->
+    <div id="loginModal" class="fixed inset-0 z-[60] bg-black/50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h2 class="text-xl font-bold mb-4">Welcome Back</h2>
+            <div class="space-y-3">
+                <select id="loginRole" class="w-full border p-2 rounded-lg"><option value="nanny">Nanny</option><option value="parent">Parent</option></select>
+                <input id="loginId" type="text" placeholder="Enter ID..." class="w-full border p-2 rounded-lg font-mono text-sm">
+                <button onclick="doLogin()" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PLAN ACTIVITY MODAL (Accordion) -->
+    <div id="planModal" class="fixed inset-0 z-[60] bg-white hidden flex flex-col">
+        <div class="p-4 border-b flex justify-between items-center bg-white">
+            <h2 class="font-bold text-lg">New Activity Plan</h2>
+            <button onclick="closeModals()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 bg-slate-50">
+            <p class="text-xs text-gray-500 mb-4">Select up to 3 milestones to target.</p>
+            <div id="milestoneAccordion" class="space-y-2"></div>
+        </div>
+        <div class="p-4 border-t bg-white">
+            <div id="selectedCount" class="text-xs text-gray-400 mb-2">0 selected</div>
+            <button onclick="submitPlan()" id="submitPlanBtn" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Generate Plan</button>
+        </div>
+    </div>
+
+    <!-- LOG OBSERVATION MODAL -->
+    <div id="logModal" class="fixed inset-0 z-[60] bg-black/50 hidden flex items-end sm:items-center justify-center">
+        <div class="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl p-6 shadow-2xl animate-slide-up">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Log Observation</h2>
+                <button onclick="closeModals()"><i class="fa-solid fa-times"></i></button>
+            </div>
             
-            <!-- Welcome Placeholder -->
-            <div id="emptyState" class="glass h-96 rounded-xl shadow-sm border border-emerald-100 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-                <i class="fa-solid fa-child-reaching text-6xl mb-4 text-emerald-200"></i>
-                <p>Select a child from the list to view their Learning Journey.</p>
-            </div>
-
-            <!-- Active Child View -->
-            <div id="childView" class="hidden space-y-6">
-                
-                <!-- Child Header -->
-                <div class="glass p-6 rounded-xl shadow-sm border border-emerald-100 flex justify-between items-start bg-gradient-to-r from-white to-emerald-50">
-                    <div>
-                        <h2 id="activeChildName" class="text-2xl font-bold text-gray-800">Child Name</h2>
-                        <p id="activeChildDob" class="text-sm text-gray-500">DOB: --</p>
+            <div class="space-y-4">
+                <!-- Domain Select -->
+                <div>
+                    <label class="text-xs font-bold text-gray-500">DOMAIN</label>
+                    <select id="logDomain" onchange="filterLogOptions()" class="w-full border p-2 rounded-lg text-sm mt-1">
+                        <option value="">Select Domain...</option>
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <!-- Milestone Select -->
+                <div>
+                    <label class="text-xs font-bold text-gray-500">MILESTONE</label>
+                    <select id="logMilestone" class="w-full border p-2 rounded-lg text-sm mt-1 truncate">
+                        <option value="">Select Domain First...</option>
+                    </select>
+                </div>
+                <!-- Rating -->
+                <div>
+                    <label class="text-xs font-bold text-gray-500">MASTERY LEVEL</label>
+                    <div class="grid grid-cols-5 gap-1 mt-1 text-center">
+                        <button onclick="setRating(0)" class="rate-btn p-2 rounded border text-xs" data-val="0">0</button>
+                        <button onclick="setRating(1)" class="rate-btn p-2 rounded border text-xs" data-val="1">1</button>
+                        <button onclick="setRating(2)" class="rate-btn p-2 rounded border text-xs" data-val="2">2</button>
+                        <button onclick="setRating(3)" class="rate-btn p-2 rounded border text-xs" data-val="3">3</button>
+                        <button onclick="setRating(4)" class="rate-btn p-2 rounded border text-xs" data-val="4">4</button>
                     </div>
-                    <div class="text-right">
-                        <span class="inline-block px-2 py-1 bg-emerald-100 text-emerald-800 text-xs rounded-full font-bold">Active Profile</span>
+                    <div class="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
+                        <span>Unattempted</span><span>Independent</span>
                     </div>
                 </div>
 
-                <!-- Tabs -->
-                <div class="flex border-b border-gray-200 gap-6">
-                    <button onclick="switchTab('assess')" id="tab-assess" class="pb-2 text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 transition-colors">Assess & Review</button>
-                    <button onclick="switchTab('plan')" id="tab-plan" class="pb-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors">Plan & Do</button>
-                </div>
-
-                <!-- TAB 1: ASSESS (Progress Matrix) -->
-                <div id="view-assess" class="glass p-6 rounded-xl shadow-sm border border-emerald-100 animate-fade-in">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold text-gray-700">Current Mastery</h3>
-                        <button onclick="fetchProfile()" class="text-xs text-emerald-600 hover:underline"><i class="fa-solid fa-rotate-right mr-1"></i>Refresh</button>
-                    </div>
-                    
-                    <div id="masteryList" class="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                        <!-- Mastery Items -->
-                    </div>
-
-                    <!-- Add Manual Log Section -->
-                    <div class="mt-6 pt-6 border-t border-gray-100">
-                        <h4 class="text-sm font-bold mb-3 text-gray-600">Log New Observation</h4>
-                        <div class="flex gap-2">
-                            <input type="text" id="manualMilestoneId" placeholder="ID (e.g. CL-03-A)" class="border rounded px-3 py-2 text-sm w-full focus:outline-emerald-500">
-                            <select id="manualScore" class="border rounded px-3 py-2 text-sm focus:outline-emerald-500 bg-white">
-                                <option value="0">0 - Unattempted</option>
-                                <option value="1">1 - Introduced</option>
-                                <option value="2">2 - Guided</option>
-                                <option value="3">3 - Assisted</option>
-                                <option value="4">4 - Independent</option>
-                            </select>
-                            <button onclick="submitLog()" class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 transition">Log</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 2: PLAN (Activity Generator) -->
-                <div id="view-plan" class="hidden glass p-6 rounded-xl shadow-sm border border-emerald-100 animate-fade-in">
-                    <div class="mb-6">
-                        <h3 class="font-bold text-gray-700 mb-2">Select Objectives</h3>
-                        <p class="text-xs text-gray-500 mb-4">Choose up to 3 milestones to focus on.</p>
-                        
-                        <div id="objectiveSelector" class="flex flex-wrap gap-2 mb-4">
-                            <input type="text" id="objInput" placeholder="Add ID (e.g. PD-03-B)" class="border rounded px-3 py-1 text-sm focus:outline-emerald-500 w-48">
-                            <button onclick="addObjective()" class="text-emerald-600 text-sm hover:text-emerald-800 font-bold"><i class="fa-solid fa-plus-circle"></i> Add</button>
-                        </div>
-                        
-                        <!-- Selected Objectives -->
-                        <div id="selectedObjectives" class="flex flex-wrap gap-2 min-h-[44px] p-2 bg-gray-50 rounded border border-gray-200 mb-4 items-center">
-                            <span class="text-gray-400 text-xs italic px-1">No objectives selected...</span>
-                        </div>
-
-                        <button onclick="generateActivity()" id="genBtn" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-indigo-700 transition transform hover:scale-[1.01]">
-                            <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Generate Activity
-                        </button>
-                    </div>
-
-                    <!-- Result Area -->
-                    <div id="activityResult" class="hidden border-t pt-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-bold text-indigo-900">AI Generated Plan</h4>
-                            <span id="activityStatusBadge" class="text-xs font-mono bg-yellow-100 text-yellow-800 px-2 py-1 rounded">PENDING</span>
-                        </div>
-                        <div id="activityContent" class="bg-indigo-50 p-4 rounded-lg text-sm font-mono text-indigo-900 whitespace-pre-wrap max-h-96 overflow-y-auto shadow-inner border border-indigo-100">
-                            Waiting for AI...
-                        </div>
-                    </div>
-                </div>
-
+                <button onclick="submitObservation()" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold mt-2">Save Record</button>
             </div>
         </div>
     </div>
 
-    <!-- JAVASCRIPT LOGIC -->
+
     <script>
-        // --- CONFIG ---
-        // UPDATED URL
-        const API_URL = "https://script.google.com/macros/s/AKfycbyalx3VXoHDaOsXHyYSluBxR34xJTUnhO_B66pgYJafxS1v09qTgLzeR4kEHU4kszba/exec";
+        // --- CONSTANTS & STATE ---
+        const API_URL = "https://script.google.com/macros/s/AKfycbzoiDfHl_HU-YY-ZEeYjU038y09lB0k2lg_NLxBpvmT8m93ZpyCU_kTeVuqsSIN7qGr/exec";
         
-        let CURRENT_USER_ID = localStorage.getItem('bloom_user_id') || "";
-        let CURRENT_ROLE = localStorage.getItem('bloom_user_role') || "nanny";
-        
-        let ACTIVE_CHILD_ID = null;
-        let SELECTED_OBJECTIVES = [];
-        let POLLING_INTERVAL = null;
+        let STATE = {
+            user: { id: localStorage.getItem('bb_uid'), role: localStorage.getItem('bb_role') },
+            child: null, // {id, name}
+            library: [], // All Milestones
+            feed: [],
+            selectedObjectives: [],
+            logRating: null
+        };
+
+        const DOMAINS = {
+            "CL": "Communication", "PSE": "Social/Emotional", "PD": "Physical",
+            "LIT": "Literacy", "NUM": "Numeracy", "UW": "World", "EAD": "Art & Design"
+        };
 
         // --- INIT ---
         document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById('apiUrlInput').value = API_URL; // Display only
-            document.getElementById('userIdInput').value = CURRENT_USER_ID;
-            document.getElementById('userRoleSelect').value = CURRENT_ROLE;
-
-            if (CURRENT_USER_ID) {
-                fetchChildren();
+            if(STATE.user.id) {
+                initApp();
+            } else {
+                showLoginModal();
             }
         });
 
-        function handleLogin() {
-            const id = document.getElementById('userIdInput').value.trim();
-            const role = document.getElementById('userRoleSelect').value;
-
-            if(!id) return alert("Please enter a User ID");
+        function initApp() {
+            closeModals();
+            document.getElementById('loginBtn').classList.add('hidden');
             
-            localStorage.setItem('bloom_user_id', id);
-            localStorage.setItem('bloom_user_role', role);
+            // 1. Fetch Child
+            fetchChildren(); // Selects first child automatically for MVP
             
-            CURRENT_USER_ID = id;
-            CURRENT_ROLE = role;
-
-            fetchChildren();
+            // 2. Fetch Library (Async, caching)
+            callApi({ action: "getMilestoneLibrary" }).then(res => {
+                if(res.status === "success") {
+                    STATE.library = res.data;
+                    buildAccordion();
+                    buildLogDropdowns();
+                }
+            });
         }
 
-        // --- API HELPERS (CORS BYPASS) ---
+        // --- API & DATA ---
         async function callApi(payload) {
             try {
-                // To bypass CORS in GAS, we use 'text/plain' and 'follow'
-                const response = await fetch(API_URL, {
-                    redirect: "follow", 
+                const res = await fetch(API_URL, {
+                    redirect: "follow",
                     method: 'POST',
-                    headers: {
-                        "Content-Type": "text/plain;charset=utf-8", 
-                    },
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
                     body: JSON.stringify(payload)
                 });
-                
-                const text = await response.text();
-                
-                if (text.includes("<!DOCTYPE html>") || text.includes("accounts.google.com")) {
-                     throw new Error("Authentication Error: The script returned a Login Page instead of JSON. Please ensure the Deployment is set to 'Anyone' (Anonymous) access.");
-                }
-
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    throw new Error("Invalid JSON received: " + text.substring(0, 50) + "...");
-                }
-
+                return await res.json();
             } catch (e) {
-                console.error("API Fetch Error:", e);
-                alert("API Error: " + e.message);
-                return null;
+                console.error(e);
+                return { status: "error", message: e.message };
             }
         }
-
-        // --- CORE FUNCTIONS ---
 
         async function fetchChildren() {
-            const listEl = document.getElementById('childList');
-            listEl.innerHTML = '<div class="text-center py-4"><div class="loading-spinner ease-linear rounded-full border-4 border-t-4 border-emerald-200 h-6 w-6 mx-auto"></div></div>';
+            const action = STATE.user.role === 'parent' ? "getParentChildren" : "getEducatorChildren";
+            const payload = { action: action, [STATE.user.role === 'parent' ? 'parentId' : 'nannyId']: STATE.user.id };
             
-            const actionType = (CURRENT_ROLE === 'parent') ? "getParentChildren" : "getEducatorChildren";
-            const payload = { action: actionType };
-            if (CURRENT_ROLE === 'parent') {
-                payload.parentId = CURRENT_USER_ID;
+            const res = await callApi(payload);
+            if(res.status === "success" && res.data.length > 0) {
+                const child = res.data[0]; // MVP: Auto-select first
+                STATE.child = child;
+                document.getElementById('childNameTitle').innerText = child.firstName;
+                document.getElementById('childAvatar').innerText = child.firstName.charAt(0);
+                
+                loadFeed();
+                loadCharts();
             } else {
-                payload.nannyId = CURRENT_USER_ID;
+                alert("No children found. Check ID.");
+                logout();
+            }
+        }
+
+        async function loadFeed() {
+            const container = document.getElementById('feedContainer');
+            const res = await callApi({ action: "getChildFeed", childId: STATE.child.childId });
+            document.getElementById('feedLoader').classList.add('hidden');
+            
+            if(res.status === "success") {
+                STATE.feed = res.data;
+                renderFeed();
+            }
+        }
+
+        async function loadCharts() {
+            const res = await callApi({ action: "getDashboardData", childId: STATE.child.childId });
+            if(res.status === "success") {
+                renderRadar(res.data.scores);
+            }
+        }
+
+        // --- RENDERERS ---
+
+        function renderFeed() {
+            const container = document.getElementById('feedContainer');
+            container.innerHTML = "";
+            
+            if(STATE.feed.length === 0) {
+                container.innerHTML = `<div class="text-center text-gray-400 py-10">No history yet. Start by planning an activity!</div>`;
+                return;
             }
 
-            const res = await callApi(payload);
-
-            listEl.innerHTML = "";
-
-            if (res && res.status === "success" && res.data.length > 0) {
-                res.data.forEach(child => {
-                    const div = document.createElement('div');
-                    div.className = "p-3 bg-white border border-gray-200 rounded-lg hover:shadow-md cursor-pointer transition flex justify-between items-center group";
-                    div.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-xs">
-                                ${child.firstName.charAt(0)}
+            STATE.feed.forEach(item => {
+                let card = "";
+                
+                // TYPE 1: OBSERVATION
+                if(item.type === "OBSERVATION") {
+                    const objData = JSON.parse(item.objectives || '{"list":[]}');
+                    const firstObj = objData.list[0] || {};
+                    card = `
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-check"></i>
                             </div>
                             <div>
-                                <p class="font-bold text-gray-800 group-hover:text-emerald-700">${child.firstName}</p>
-                                <p class="text-[10px] text-gray-500">DOB: ${child.dob.split(' ')[0]}</p>
+                                <p class="text-xs text-gray-400 font-bold mb-1">OBSERVATION</p>
+                                <p class="text-sm text-gray-800 font-medium line-clamp-2">${getMilestoneDesc(firstObj.id)}</p>
+                                <div class="mt-2 inline-block px-2 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded">
+                                    Marked as Level ${firstObj.score}
+                                </div>
                             </div>
                         </div>
-                        <i class="fa-solid fa-chevron-right text-gray-300 group-hover:text-emerald-500"></i>
                     `;
-                    div.onclick = () => loadChild(child);
-                    listEl.appendChild(div);
-                });
-            } else {
-                const errMsg = res ? res.message : "Connection failed";
-                listEl.innerHTML = `<p class="text-sm text-red-500 text-center py-2 bg-red-50 rounded border border-red-100">${errMsg}</p>`;
-            }
+                }
+                // TYPE 2: ACTIVITY (PENDING OR COMPLETED)
+                else {
+                    const isCompleted = item.type === "COMPLETED";
+                    const statusColor = isCompleted ? "bg-slate-100 text-slate-500" : "bg-indigo-100 text-indigo-600";
+                    const icon = isCompleted ? "fa-check-circle" : "fa-clock";
+                    const title = item.data?.["Creative Name"] || "Generating Activity...";
+                    const desc = item.data?.["Activity"] || "Waiting for AI...";
+
+                    card = `
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="px-2 py-1 rounded text-[10px] font-bold ${statusColor}">
+                                    <i class="fa-solid ${icon} mr-1"></i> ${isCompleted ? "COMPLETED" : "READY"}
+                                </span>
+                                <span class="text-[10px] text-gray-400">${item.timestamp.split(' ')[0]}</span>
+                            </div>
+                            <h3 class="font-bold text-slate-800 text-lg mb-1">${title}</h3>
+                            <p class="text-sm text-gray-500 line-clamp-3 mb-3">${desc}</p>
+                            ${!isCompleted ? 
+                                `<button onclick="completeActivity('${item.activityId}')" class="w-full py-2 border border-indigo-200 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-50">View & Complete</button>` : 
+                                `<button class="text-xs text-gray-400 font-bold">View History</button>`
+                            }
+                        </div>
+                    `;
+                }
+                container.innerHTML += card;
+            });
         }
 
-        async function loadChild(child) {
-            ACTIVE_CHILD_ID = child.childId;
+        function renderRadar(scores) {
+            const ctx = document.getElementById('radarChart');
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: Object.keys(DOMAINS).map(k => DOMAINS[k]),
+                    datasets: [{
+                        label: 'Mastery Score',
+                        data: Object.keys(DOMAINS).map(k => scores[k] || 0),
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        pointBackgroundColor: '#fff',
+                    }]
+                },
+                options: {
+                    scales: { r: { beginAtZero: true, ticks: { display: false } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // --- ACCORDION LOGIC ---
+        function buildAccordion() {
+            const container = document.getElementById('milestoneAccordion');
+            container.innerHTML = "";
             
-            document.getElementById('emptyState').classList.add('hidden');
-            document.getElementById('childView').classList.remove('hidden');
-            document.getElementById('activeChildName').innerText = child.firstName;
-            document.getElementById('activeChildDob').innerText = "DOB: " + child.dob.split(' ')[0];
-
-            fetchProfile();
-        }
-
-        async function fetchProfile() {
-            const masteryList = document.getElementById('masteryList');
-            masteryList.innerHTML = '<p class="text-xs text-gray-400 p-2">Loading progress matrix...</p>';
-
-            const res = await callApi({
-                action: "getEduProfile",
-                childId: ACTIVE_CHILD_ID
+            // Group by Domain -> Age
+            const grouped = {};
+            STATE.library.forEach(m => {
+                if(!grouped[m.domain]) grouped[m.domain] = {};
+                if(!grouped[m.domain][m.age]) grouped[m.domain][m.age] = [];
+                grouped[m.domain][m.age].push(m);
             });
 
-            if (res && res.status === "success") {
-                renderMastery(res.data.mastery);
-            }
-        }
-
-        function renderMastery(masteryObj) {
-            const container = document.getElementById('masteryList');
-            container.innerHTML = "";
-
-            if (Object.keys(masteryObj).length === 0) {
-                container.innerHTML = "<p class='text-sm text-gray-500 italic p-2'>No milestones recorded yet. Log one below.</p>";
-                return;
-            }
-
-            Object.keys(masteryObj).forEach(key => {
-                const score = masteryObj[key];
-                const row = document.createElement('div');
-                row.className = "flex justify-between items-center p-2 hover:bg-gray-50 rounded border-b border-gray-100 transition";
+            Object.keys(grouped).forEach((domain, dIdx) => {
+                const domainId = `d-${dIdx}`;
+                let ageHtml = "";
                 
-                let scoreColor = "bg-gray-200 text-gray-600";
-                if(score === 4) scoreColor = "bg-green-100 text-green-700 border border-green-200";
-                if(score === 0) scoreColor = "bg-red-50 text-red-400 border border-red-100";
+                Object.keys(grouped[domain]).forEach((age, aIdx) => {
+                    let itemsHtml = grouped[domain][age].map(m => `
+                        <label class="flex items-start gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer">
+                            <input type="checkbox" value="${m.id}" onchange="toggleObjective(this)" class="mt-1">
+                            <span class="text-xs text-slate-600">${m.desc}</span>
+                        </label>
+                    `).join("");
 
-                row.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <span class="font-mono text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200">${key}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold px-2 py-1 rounded-full ${scoreColor}">Level ${score}</span>
-                        <button onclick="populateLogInput('${key}', ${score})" class="text-gray-300 hover:text-emerald-600 px-2 transition">
-                            <i class="fa-solid fa-pen-to-square"></i>
+                    ageHtml += `
+                        <div class="border-l-2 border-slate-200 ml-2 pl-2 mt-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase mb-1">${age}</p>
+                            <div class="space-y-1">${itemsHtml}</div>
+                        </div>
+                    `;
+                });
+
+                const html = `
+                    <div class="border rounded-xl mb-2 overflow-hidden">
+                        <button onclick="toggleAccordion('${domainId}')" class="w-full flex justify-between items-center p-3 bg-white font-bold text-sm text-slate-700">
+                            ${domain}
+                            <i id="icon-${domainId}" class="fa-solid fa-chevron-down transition-transform"></i>
                         </button>
+                        <div id="${domainId}" class="accordion-content bg-white px-3 pb-3">
+                            ${ageHtml}
+                        </div>
                     </div>
                 `;
-                container.appendChild(row);
+                container.innerHTML += html;
             });
         }
 
-        function populateLogInput(id, score) {
-            document.getElementById('manualMilestoneId').value = id;
-            document.getElementById('manualScore').value = score;
-        }
-
-        async function submitLog() {
-            const id = document.getElementById('manualMilestoneId').value;
-            const score = document.getElementById('manualScore').value;
-
-            if(!id) return alert("Enter a Milestone ID");
-
-            const btn = document.querySelector('button[onclick="submitLog()"]');
-            const originalText = btn.innerText;
-            btn.innerText = "...";
-            
-            const res = await callApi({
-                action: "logObservation",
-                childId: ACTIVE_CHILD_ID,
-                milestoneId: id,
-                score: parseInt(score)
-            });
-
-            btn.innerText = originalText;
-
-            if(res && res.status === "success") {
-                fetchProfile();
-                document.getElementById('manualMilestoneId').value = "";
+        function toggleAccordion(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById('icon-' + id);
+            if(el.classList.contains('accordion-open')) {
+                el.classList.remove('accordion-open');
+                icon.style.transform = 'rotate(0deg)';
             } else {
-                alert("Update failed");
+                el.classList.add('accordion-open');
+                icon.style.transform = 'rotate(180deg)';
             }
         }
 
-        function addObjective() {
-            const input = document.getElementById('objInput');
-            const val = input.value.trim();
-            if(!val) return;
+        // --- ACTIONS ---
+
+        function toggleObjective(chk) {
+            if(chk.checked) {
+                if(STATE.selectedObjectives.length >= 3) {
+                    alert("Max 3 objectives.");
+                    chk.checked = false;
+                    return;
+                }
+                STATE.selectedObjectives.push(chk.value);
+            } else {
+                STATE.selectedObjectives = STATE.selectedObjectives.filter(id => id !== chk.value);
+            }
+            document.getElementById('selectedCount').innerText = `${STATE.selectedObjectives.length} selected`;
+        }
+
+        async function submitPlan() {
+            if(STATE.selectedObjectives.length === 0) return alert("Select at least 1 milestone.");
             
-            if(SELECTED_OBJECTIVES.includes(val)) return;
-            if(SELECTED_OBJECTIVES.length >= 3) {
-                alert("Max 3 objectives");
-                return;
-            }
-
-            SELECTED_OBJECTIVES.push(val);
-            input.value = "";
-            renderObjectives();
-        }
-
-        function renderObjectives() {
-            const container = document.getElementById('selectedObjectives');
-            if(SELECTED_OBJECTIVES.length === 0) {
-                container.innerHTML = '<span class="text-gray-400 text-xs italic px-1">No objectives selected...</span>';
-                return;
-            }
-            container.innerHTML = "";
-            SELECTED_OBJECTIVES.forEach(obj => {
-                const tag = document.createElement('span');
-                tag.className = "bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded border border-indigo-200 flex items-center gap-2 shadow-sm";
-                tag.innerHTML = `${obj} <i class="fa-solid fa-times cursor-pointer hover:text-red-500 transition" onclick="removeObjective('${obj}')"></i>`;
-                container.appendChild(tag);
-            });
-        }
-
-        function removeObjective(id) {
-            SELECTED_OBJECTIVES = SELECTED_OBJECTIVES.filter(x => x !== id);
-            renderObjectives();
-        }
-
-        async function generateActivity() {
-            if(SELECTED_OBJECTIVES.length === 0) return alert("Add at least 1 objective");
-
-            const btn = document.getElementById('genBtn');
-            const resArea = document.getElementById('activityResult');
-            const statusBadge = document.getElementById('activityStatusBadge');
-            const contentArea = document.getElementById('activityContent');
-
+            const btn = document.getElementById('submitPlanBtn');
+            btn.innerText = "Generating...";
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Queueing...';
-            
+
             const res = await callApi({
                 action: "generateActivity",
-                childId: ACTIVE_CHILD_ID,
-                objectives: SELECTED_OBJECTIVES
+                childId: STATE.child.childId,
+                objectives: STATE.selectedObjectives
             });
 
-            if(res && res.status === "success") {
-                const activityId = res.data.activityId;
-                
-                resArea.classList.remove('hidden');
-                btn.innerHTML = '<i class="fa-solid fa-hourglass-start mr-2"></i> Generating...';
-                statusBadge.className = "text-xs font-mono bg-yellow-100 text-yellow-800 px-2 py-1 rounded border border-yellow-200";
-                statusBadge.innerText = "PROCESSING";
-                contentArea.innerText = "Request queued. AI is thinking...";
-
-                if(POLLING_INTERVAL) clearInterval(POLLING_INTERVAL);
-                let attempts = 0;
-                
-                POLLING_INTERVAL = setInterval(async () => {
-                    attempts++;
-                    if(attempts > 30) {
-                        clearInterval(POLLING_INTERVAL);
-                        btn.disabled = false;
-                        btn.innerHTML = "Generate Activity";
-                        statusBadge.innerText = "TIMEOUT";
-                        statusBadge.className = "text-xs font-mono bg-red-100 text-red-800 px-2 py-1 rounded border border-red-200";
-                        return;
-                    }
-
-                    const pollRes = await callApi({
-                        action: "checkActivityStatus",
-                        activityId: activityId
-                    });
-
-                    if(pollRes && pollRes.data && pollRes.data.status === "complete") {
-                        clearInterval(POLLING_INTERVAL);
-                        btn.disabled = false;
-                        btn.innerHTML = "Generate New Activity";
-                        
-                        statusBadge.innerText = "READY";
-                        statusBadge.className = "text-xs font-mono bg-green-100 text-green-800 px-2 py-1 rounded border border-green-200";
-                        
-                        const resultData = pollRes.data.activity;
-                        contentArea.innerText = typeof resultData === 'object' ? JSON.stringify(resultData, null, 2) : resultData;
-                    }
-                }, 3000); 
-
+            if(res.status === "success") {
+                closeModals();
+                switchView('feed');
+                loadFeed(); // Refresh
+                STATE.selectedObjectives = []; // Reset
             } else {
-                btn.disabled = false;
-                btn.innerText = "Generate Activity";
-                alert("Failed to queue activity");
+                alert("Failed: " + res.message);
+            }
+            btn.innerText = "Generate Plan";
+            btn.disabled = false;
+        }
+
+        function buildLogDropdowns() {
+            const dSelect = document.getElementById('logDomain');
+            dSelect.innerHTML = '<option value="">Select Domain...</option>';
+            Object.keys(DOMAINS).forEach(k => {
+                // Find full name from library to match CSV
+                const example = STATE.library.find(m => m.id.startsWith(k));
+                if(example) dSelect.innerHTML += `<option value="${example.domain}">${example.domain}</option>`;
+            });
+        }
+
+        function filterLogOptions() {
+            const dVal = document.getElementById('logDomain').value;
+            const mSelect = document.getElementById('logMilestone');
+            mSelect.innerHTML = '<option value="">Select Milestone...</option>';
+            
+            const filtered = STATE.library.filter(m => m.domain === dVal);
+            filtered.forEach(m => {
+                mSelect.innerHTML += `<option value="${m.id}">${m.desc.substring(0, 50)}...</option>`;
+            });
+        }
+
+        function setRating(val) {
+            STATE.logRating = val;
+            document.querySelectorAll('.rate-btn').forEach(b => {
+                b.classList.remove('bg-emerald-600', 'text-white');
+                if(parseInt(b.dataset.val) === val) b.classList.add('bg-emerald-600', 'text-white');
+            });
+        }
+
+        async function submitObservation() {
+            const mId = document.getElementById('logMilestone').value;
+            if(!mId || STATE.logRating === null) return alert("Complete all fields");
+
+            const res = await callApi({
+                action: "logObservation",
+                childId: STATE.child.childId,
+                milestoneId: mId,
+                score: STATE.logRating,
+                isAdHoc: true
+            });
+
+            if(res.status === "success") {
+                closeModals();
+                loadFeed();
+                loadCharts();
             }
         }
 
-        // --- UI HELPERS ---
-        function switchTab(tab) {
-            if(tab === 'assess') {
-                document.getElementById('view-assess').classList.remove('hidden');
-                document.getElementById('view-plan').classList.add('hidden');
-                document.getElementById('tab-assess').className = "pb-2 text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 transition-colors";
-                document.getElementById('tab-plan').className = "pb-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors";
+        // --- UTILS ---
+        function switchView(view) {
+            document.getElementById('view-feed').classList.add('hidden');
+            document.getElementById('view-progress').classList.add('hidden');
+            document.getElementById('nav-feed').className = "py-3 tab-inactive";
+            document.getElementById('nav-progress').className = "py-3 tab-inactive";
+            
+            document.getElementById('view-' + view).classList.remove('hidden');
+            document.getElementById('nav-' + view).className = "py-3 tab-active";
+        }
+
+        function toggleFab() {
+            const menu = document.getElementById('fabMenu');
+            const btn = document.getElementById('fabBtn');
+            if(menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+                btn.classList.add('fab-open', 'bg-red-500');
+                btn.innerHTML = '<i class="fa-solid fa-times"></i>';
             } else {
-                document.getElementById('view-assess').classList.add('hidden');
-                document.getElementById('view-plan').classList.remove('hidden');
-                document.getElementById('tab-plan').className = "pb-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 transition-colors";
-                document.getElementById('tab-assess').className = "pb-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors";
+                menu.classList.add('hidden');
+                btn.classList.remove('fab-open', 'bg-red-500');
+                btn.innerHTML = '<i class="fa-solid fa-plus"></i>';
             }
         }
+
+        function openPlanModal() { toggleFab(); document.getElementById('planModal').classList.remove('hidden'); }
+        function openLogModal() { toggleFab(); document.getElementById('logModal').classList.remove('hidden'); }
+        function closeModals() { 
+            document.getElementById('planModal').classList.add('hidden'); 
+            document.getElementById('logModal').classList.add('hidden'); 
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+
+        function getMilestoneDesc(id) {
+            const m = STATE.library.find(x => x.id === id);
+            return m ? m.desc : id;
+        }
+
+        function showLoginModal() { document.getElementById('loginModal').classList.remove('hidden'); }
+        function doLogin() {
+            const id = document.getElementById('loginId').value.trim();
+            const role = document.getElementById('loginRole').value;
+            if(id) {
+                localStorage.setItem('bb_uid', id);
+                localStorage.setItem('bb_role', role);
+                location.reload();
+            }
+        }
+        function logout() { localStorage.clear(); location.reload(); }
+
     </script>
 </body>
 </html>
